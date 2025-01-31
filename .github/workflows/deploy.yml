@@ -1,4 +1,4 @@
-name: 🚀 Авто-развертывание на сервере через SSH
+name: 🚀 Авто-развертывание на сервере через SSH + HTTPS клонирование
 
 on:
   push:
@@ -20,23 +20,23 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
 
-      - name: 🖥️ Развертывание кода на сервере
+      - name: 🖥️ Развертывание кода на сервере через HTTPS
         run: |
           ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
             set -e
 
-            # Создаём папку проекта, если её нет
+            # Создаём папку, если её нет
             if [ ! -d "/home/${{ secrets.SERVER_USER }}/itmo-chatbot" ]; then
               mkdir -p /home/${{ secrets.SERVER_USER }}/itmo-chatbot
-              git clone git@github.com:${{ github.repository }}.git /home/${{ secrets.SERVER_USER }}/itmo-chatbot
+              git clone https://github.com/${{ github.repository }}.git /home/${{ secrets.SERVER_USER }}/itmo-chatbot
             fi
 
             cd /home/${{ secrets.SERVER_USER }}/itmo-chatbot
 
-            # Проверяем, является ли папка git-репозиторием
+            # Если .git нет, удаляем папку и клонируем заново
             if [ ! -d ".git" ]; then
-              rm -rf /home/${{ secrets.SERVER_USER }}/itmo-chatbot  # Удаляем сломанный каталог
-              git clone git@github.com:${{ github.repository }}.git /home/${{ secrets.SERVER_USER }}/itmo-chatbot
+              rm -rf /home/${{ secrets.SERVER_USER }}/itmo-chatbot
+              git clone https://github.com/${{ github.repository }}.git /home/${{ secrets.SERVER_USER }}/itmo-chatbot
             else
               git reset --hard
               git pull origin main
