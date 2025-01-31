@@ -20,22 +20,34 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
 
-      - name: 🖥️ Клонирование или обновление репозитория на сервере
+      - name: 🖥️ Развертывание кода на сервере
         run: |
-          ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << EOF
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
+            set -e
+
+            # Создаём папку проекта, если её нет
             if [ ! -d "/home/${{ secrets.SERVER_USER }}/itmo-chatbot" ]; then
+              mkdir -p /home/${{ secrets.SERVER_USER }}/itmo-chatbot
+              git clone git@github.com:${{ github.repository }}.git /home/${{ secrets.SERVER_USER }}/itmo-chatbot
+            fi
+
+            cd /home/${{ secrets.SERVER_USER }}/itmo-chatbot
+
+            # Проверяем, является ли папка git-репозиторием
+            if [ ! -d ".git" ]; then
+              rm -rf /home/${{ secrets.SERVER_USER }}/itmo-chatbot  # Удаляем сломанный каталог
               git clone git@github.com:${{ github.repository }}.git /home/${{ secrets.SERVER_USER }}/itmo-chatbot
             else
-              cd /home/${{ secrets.SERVER_USER }}/itmo-chatbot
               git reset --hard
               git pull origin main
             fi
           EOF
 
-      - name: 📦 Создание `.env` на сервере из Secrets
+      - name: 📦 Создание `.env` на сервере
         run: |
-          ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << EOF
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
             cd /home/${{ secrets.SERVER_USER }}/itmo-chatbot
+
             echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" > .env
             echo "SEARCH_API_KEY=${{ secrets.SEARCH_API_KEY }}" >> .env
             echo "SEARCH_ENGINE_ID=${{ secrets.SEARCH_ENGINE_ID }}" >> .env
@@ -44,7 +56,7 @@ jobs:
 
       - name: 🛠 Перезапуск Docker-контейнеров
         run: |
-          ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << EOF
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
             cd /home/${{ secrets.SERVER_USER }}/itmo-chatbot
             docker-compose down
             docker-compose up -d --build
