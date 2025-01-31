@@ -40,3 +40,4 @@ docker-compose.override.yml
 *.pid
 *.sock
 *.log
+test.py
