@@ -80,6 +80,29 @@ def get_latest_news():
         print(f"Ошибка при получении новостей: {e}")
         return []
 
+def extract_answer(query: str, response_text: str) -> Optional[int]:
+    """
+    Определяет номер правильного ответа на основе текста вопроса и ответа модели.
+    """
+    options = {}
+    lines = query.split("\n")
+    
+    for line in lines:
+        if "." in line:
+            parts = line.split(".", 1)
+            if len(parts) == 2 and parts[0].strip().isdigit():
+                num = int(parts[0].strip())
+                text = parts[1].strip()
+                options[num] = text.lower()
+
+    response_text_lower = response_text.lower()
+    
+    for num, text in options.items():
+        if text in response_text_lower:
+            return num
+    
+    return None
+
 @app.post("/api/request", response_model=PredictionResponse)
 async def predict(body: PredictionRequest):
     try:
@@ -88,13 +111,8 @@ async def predict(body: PredictionRequest):
         response_text = get_model_response(body.query)
         sources = search_links(body.query)
 
-        # Определение правильного ответа
-        answer = None
-        if any(str(i) + "." in body.query for i in range(1, 11)):
-            for i in range(1, 11):
-                if f"{i}." in body.query and str(i) in response_text:
-                    answer = i
-                    break
+        # Используем новую функцию для определения `answer`
+        answer = extract_answer(body.query, response_text)
         
         response = PredictionResponse(
             id=body.id,
