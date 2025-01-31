@@ -20,12 +20,26 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
 
-      - name: 🖥️ Развертывание кода на сервере через HTTPS
+      - name: 🖥️ Подключение и деплой на сервер
         run: |
           ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
-            set -e
+            set -e  # Прекратить выполнение при ошибке
 
-            # Создаём папку, если её нет
+            # ✅ Установка Docker и Docker-Compose, если их нет
+            if ! command -v docker &> /dev/null; then
+              echo "🚀 Устанавливаем Docker..."
+              sudo apt update && sudo apt install -y docker.io
+              sudo systemctl enable docker
+              sudo systemctl start docker
+            fi
+
+            if ! command -v docker-compose &> /dev/null; then
+              echo "🚀 Устанавливаем Docker-Compose..."
+              sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+              sudo chmod +x /usr/local/bin/docker-compose
+            fi
+
+            # ✅ Клонирование или обновление репозитория
             if [ ! -d "/home/${{ secrets.SERVER_USER }}/itmo-chatbot" ]; then
               mkdir -p /home/${{ secrets.SERVER_USER }}/itmo-chatbot
               git clone https://github.com/${{ github.repository }}.git /home/${{ secrets.SERVER_USER }}/itmo-chatbot
@@ -33,7 +47,6 @@ jobs:
 
             cd /home/${{ secrets.SERVER_USER }}/itmo-chatbot
 
-            # Если .git нет, удаляем папку и клонируем заново
             if [ ! -d ".git" ]; then
               rm -rf /home/${{ secrets.SERVER_USER }}/itmo-chatbot
               git clone https://github.com/${{ github.repository }}.git /home/${{ secrets.SERVER_USER }}/itmo-chatbot
@@ -41,23 +54,14 @@ jobs:
               git reset --hard
               git pull origin main
             fi
-          EOF
 
-      - name: 📦 Создание `.env` на сервере
-        run: |
-          ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
-            cd /home/${{ secrets.SERVER_USER }}/itmo-chatbot
-
+            # ✅ Создание `.env`
             echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" > .env
             echo "SEARCH_API_KEY=${{ secrets.SEARCH_API_KEY }}" >> .env
             echo "SEARCH_ENGINE_ID=${{ secrets.SEARCH_ENGINE_ID }}" >> .env
             echo "DEBUG=False" >> .env
-          EOF
 
-      - name: 🛠 Перезапуск Docker-контейнеров
-        run: |
-          ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
-            cd /home/${{ secrets.SERVER_USER }}/itmo-chatbot
+            # ✅ Перезапуск контейнеров
             docker-compose down
             docker-compose up -d --build
           EOF
