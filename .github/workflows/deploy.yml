@@ -1,0 +1,34 @@
+name: 🚀 Deploy to Server
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🚀 Проверка репозитория
+        uses: actions/checkout@v3
+
+      - name: 🔑 Установка SSH ключа
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
+
+      - name: 📂 Копирование файлов на сервер
+        run: |
+          rsync -avz --exclude '.git' --exclude '.github' ./ ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }}:/home/${{ secrets.SERVER_USER }}/itmo-chatbot
+
+      - name: 🚀 Перезапуск контейнеров
+        run: |
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
+            cd /home/${{ secrets.SERVER_USER }}/itmo-chatbot
+            git pull origin main
+            docker compose down
+            docker compose up -d --build
+          EOF
