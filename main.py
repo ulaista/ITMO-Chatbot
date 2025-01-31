@@ -8,6 +8,8 @@ import feedparser  # RSS-парсинг новостей
 from fastapi import FastAPI, HTTPException, Request, Response
 from pydantic import BaseModel, HttpUrl
 from utils.logger import setup_logger
+import asyncio
+import aiohttp
 
 # Инициализация FastAPI
 app = FastAPI()
@@ -38,20 +40,21 @@ async def startup_event():
     logger = await setup_logger()
 
 # Функция обработки запроса через GPT
-def get_model_response(query):
+async def get_model_response(query):
     try:
-        response = openai_client.chat.completions.create(
+        loop = asyncio.get_running_loop()
+        response = await loop.run_in_executor(None, lambda: openai_client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[{"role": "system", "content": "Ты помощник, отвечающий на вопросы об Университете ИТМО."},
                       {"role": "user", "content": query}]
-        )
+        ))
         return response.choices[0].message.content
     except openai.OpenAIError as e:
         print(f"Ошибка OpenAI API: {e}")
         return "Ошибка при обращении к OpenAI API"
 
 # Функция поиска ссылок в интернете
-def search_links(query):
+async def search_links(query):
     try:
         base_url = "https://www.googleapis.com/customsearch/v1"
         params = {
@@ -60,14 +63,13 @@ def search_links(query):
             "cx": SEARCH_ENGINE_ID,
             "num": 3
         }
-        response = requests.get(base_url, params=params)
-        data = response.json()
 
-        if "items" in data:
-            return [item["link"] for item in data["items"]]
-        else:
-            return []
-    except requests.RequestException as e:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(base_url, params=params) as response:
+                data = await response.json()
+
+        return [item["link"] for item in data.get("items", [])]
+    except Exception as e:
         print(f"Ошибка поиска Google API: {e}")
         return []
 
@@ -107,13 +109,15 @@ def extract_answer(query: str, response_text: str) -> Optional[int]:
 async def predict(body: PredictionRequest):
     try:
         await logger.info(f"Processing request: {body.id}")
-        
-        response_text = get_model_response(body.query)
-        sources = search_links(body.query)
 
-        # Используем новую функцию для определения `answer`
+        # Запускаем OpenAI и Google Search одновременно (АСИНХРОННО)
+        response_text, sources = await asyncio.gather(
+            get_model_response(body.query),
+            search_links(body.query)
+        )
+
         answer = extract_answer(body.query, response_text)
-        
+
         response = PredictionResponse(
             id=body.id,
             answer=answer,
