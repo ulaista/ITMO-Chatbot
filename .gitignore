@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+*.sqlite3
+instance/
+*.log
+logs/
+*.db
+
+# Ignore environment variables
+.env
+.env.local
+.env.development
+.env.production
+
+# Ignore virtual environments
+venv/
+.env/
+
+# Docker
+*.pid
+*.sock
+*.log
+*.crt
+*.key
+*.pem
+.dockerignore
+docker-compose.override.yml
+
+# VSCode and JetBrains
+.vscode/
+.idea/
+
+# FastAPI and Gunicorn
+*.pid
+*.sock
+*.log

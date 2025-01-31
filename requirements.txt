@@ -1,0 +1,9 @@
+fastapi
+aiologger[aiofiles]
+pip-chill
+uvicorn
+gunicorn
+requests
+openai
+feedparser
+pydantic
