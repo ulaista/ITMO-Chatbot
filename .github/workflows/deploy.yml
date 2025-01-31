@@ -1,4 +1,4 @@
-name: 🚀 Авто-развертывание на сервере
+name: 🚀 Авто-развертывание на сервере через SSH
 
 on:
   push:
@@ -13,11 +13,18 @@ jobs:
       - name: 🛒 Checkout репозитория
         uses: actions/checkout@v3
 
-      - name: 🖥️ Подключение к серверу и клонирование репозитория
+      - name: 🔑 Настройка SSH-доступа
         run: |
-          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << EOF
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
+
+      - name: 🖥️ Клонирование или обновление репозитория на сервере
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << EOF
             if [ ! -d "/home/${{ secrets.SERVER_USER }}/itmo-chatbot" ]; then
-              git clone https://github.com/${{ github.repository }}.git /home/${{ secrets.SERVER_USER }}/itmo-chatbot
+              git clone git@github.com:${{ github.repository }}.git /home/${{ secrets.SERVER_USER }}/itmo-chatbot
             else
               cd /home/${{ secrets.SERVER_USER }}/itmo-chatbot
               git reset --hard
@@ -25,9 +32,9 @@ jobs:
             fi
           EOF
 
-      - name: 🔑 Создание .env файла на сервере
+      - name: 📦 Создание `.env` на сервере из Secrets
         run: |
-          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << EOF
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << EOF
             cd /home/${{ secrets.SERVER_USER }}/itmo-chatbot
             echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" > .env
             echo "SEARCH_API_KEY=${{ secrets.SEARCH_API_KEY }}" >> .env
@@ -37,7 +44,7 @@ jobs:
 
       - name: 🛠 Перезапуск Docker-контейнеров
         run: |
-          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << EOF
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << EOF
             cd /home/${{ secrets.SERVER_USER }}/itmo-chatbot
             docker-compose down
             docker-compose up -d --build
