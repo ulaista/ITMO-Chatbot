@@ -1,4 +1,4 @@
-name: 🚀 Deploy to Server
+name: 🚀 Авто-развертывание на сервере
 
 on:
   push:
@@ -10,25 +10,35 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 🚀 Проверка репозитория
+      - name: 🛒 Checkout репозитория
         uses: actions/checkout@v3
 
-      - name: 🔑 Установка SSH ключа
+      - name: 🖥️ Подключение к серверу и клонирование репозитория
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << EOF
+            if [ ! -d "/home/${{ secrets.SERVER_USER }}/itmo-chatbot" ]; then
+              git clone https://github.com/${{ github.repository }}.git /home/${{ secrets.SERVER_USER }}/itmo-chatbot
+            else
+              cd /home/${{ secrets.SERVER_USER }}/itmo-chatbot
+              git reset --hard
+              git pull origin main
+            fi
+          EOF
 
-      - name: 📂 Копирование файлов на сервер
+      - name: 🔑 Создание .env файла на сервере
         run: |
-          rsync -avz --exclude '.git' --exclude '.github' ./ ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }}:/home/${{ secrets.SERVER_USER }}/itmo-chatbot
-
-      - name: 🚀 Перезапуск контейнеров
-        run: |
-          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << EOF
             cd /home/${{ secrets.SERVER_USER }}/itmo-chatbot
-            git pull origin main
-            docker compose down
-            docker compose up -d --build
+            echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" > .env
+            echo "SEARCH_API_KEY=${{ secrets.SEARCH_API_KEY }}" >> .env
+            echo "SEARCH_ENGINE_ID=${{ secrets.SEARCH_ENGINE_ID }}" >> .env
+            echo "DEBUG=False" >> .env
+          EOF
+
+      - name: 🛠 Перезапуск Docker-контейнеров
+        run: |
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << EOF
+            cd /home/${{ secrets.SERVER_USER }}/itmo-chatbot
+            docker-compose down
+            docker-compose up -d --build
           EOF
